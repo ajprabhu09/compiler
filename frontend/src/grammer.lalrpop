@@ -1,0 +1,53 @@
+use std::str::FromStr;
+use crate::parser::ast::BinOp;
+use crate::parser::ast::Type;
+use crate::parser::ast::Expr;
+use crate::parser::ast::Term;
+
+grammar;
+
+
+pub Type: Type = {
+    r"Int32" => Type::Int32,
+    r"Char" => Type::Char,
+    r"Bool" => Type::Bool,
+};
+
+match {
+    r"Int32",
+    r"Char",
+    r"Bool",
+} else {
+   
+    r"[_a-zA-Z][_a-zA-Z0-9]*",
+    _ 
+}
+
+
+Int: i32 = r"[0-9]+" => i32::from_str(<>).unwrap();
+Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.into();
+
+RighAssocBinOp: BinOp = {
+    "+" => BinOp::Plus,
+    "-" => BinOp::Minus,
+    "*" => BinOp::Multiply,
+    "/" => BinOp::Divide,
+}
+
+
+
+pub Term: Term = {
+    <n: Int> => Term::I32(n),
+    <v: Ident> => Term::Var(v.into()),
+    "(" <t: Term> ")" => t
+} 
+
+
+pub Expr: Expr = {
+    <t: Term> => Expr::Term(t),
+    <t: Term> <op: RighAssocBinOp> <r: Expr> => Expr::BinExpr{
+        op,
+        lhs: Expr::Term(t).into(),
+        rhs: r.into(),
+    }
+};

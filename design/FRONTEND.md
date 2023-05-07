@@ -3,14 +3,14 @@
 
 ```
 <Type>:
-Int64
-Int32 
+Int64 // not yet implemented
+Int
 Char 
 Bool
 ``` 
 ## User Types
 ```
-structs <TypeName> {
+struct <TypeName> {
     <ident>: <Type>,
     <ident>: <Type>,
 }
@@ -18,7 +18,9 @@ structs <TypeName> {
 ```
 # functions 
 ```
+
 func <funcName>(name: <Type>): <Type> {<ScopedBlock>}
+
 
 ```
 
