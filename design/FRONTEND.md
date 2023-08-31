@@ -24,5 +24,13 @@ func <funcName>(name: <Type>): <Type> {<ScopedBlock>}
 
 ```
 
+# Variable Decl and Assign
+```
+    val x: Int = 1; // immutable 
+    var x: Int = 1; // mutable
+
+```
+
+
 ## Memory
 todo!

@@ -14,5 +14,8 @@ lalrpop = "0.19.9"
 lalrpop-util = "0.19.9"
 regex = "1"
 
+[dev-dependencies]
+stacker = "0.1.15"
+
 
 

@@ -1,13 +1,14 @@
 use std::str::FromStr;
+use std::rc::Rc;
 use crate::parser::ast::BinOp;
 use crate::parser::ast::Type;
 use crate::parser::ast::Expr;
 use crate::parser::ast::Term;
-
+use crate::parser::ast::BlockNode;
 grammar;
 
 
-pub Type: Type = {
+pub TypeIdent: Type = {
     r"Int32" => Type::Int32,
     r"Char" => Type::Char,
     r"Bool" => Type::Bool,
@@ -18,8 +19,10 @@ match {
     r"Char",
     r"Bool",
 } else {
-   
-    r"[_a-zA-Z][_a-zA-Z0-9]*",
+    r"\s*" => { }, // The default whitespace skipping is disabled if an `ignore pattern` is specified
+    r"//[^\n\r]*[\n\r]*" => { }, // Skip `// comments`
+    r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/" => { },  // Skip `/* comments */`
+    r"[_a-zA-Z][_a-zA-Z0-9]*", // Identifier rules
     _ 
 }
 
@@ -27,27 +30,78 @@ match {
 Int: i32 = r"[0-9]+" => i32::from_str(<>).unwrap();
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.into();
 
-RighAssocBinOp: BinOp = {
+AddSubOp: BinOp = {
     "+" => BinOp::Plus,
     "-" => BinOp::Minus,
+}
+
+MultiDivOp: BinOp = {
     "*" => BinOp::Multiply,
     "/" => BinOp::Divide,
 }
 
 
-
 pub Term: Term = {
     <n: Int> => Term::I32(n),
     <v: Ident> => Term::Var(v.into()),
-    "(" <t: Term> ")" => t
-} 
+}
 
 
-pub Expr: Expr = {
+ExprTerm: Expr = {
     <t: Term> => Expr::Term(t),
-    <t: Term> <op: RighAssocBinOp> <r: Expr> => Expr::BinExpr{
+    "(" <e: Expr> ")" => e,
+}
+
+
+Factor: Expr  =  {
+    <l: ExprTerm> <op: MultiDivOp> <r: Factor> => Expr::BinExpr{
         op,
-        lhs: Expr::Term(t).into(),
+        lhs: l.into(),
         rhs: r.into(),
+    },
+    ExprTerm,
+}
+
+BlockExpr: Expr = {
+    "{" <e: Expr*>  "}" => Expr::BlockExpr {
+        _type: Type::UnTyped,
+        start: {
+            fn map_to_ll(v: &[Expr]) -> Option<Rc<BlockNode>> {
+                if v.len() == 0 {
+                    return None;
+                }
+                let first  = (v.first().unwrap()).clone();
+                return Some(
+                        BlockNode {
+                            curr: first.into(),
+                            succ: map_to_ll(&v[1..])
+                        }.into()
+                )
+            }
+            map_to_ll(&e)
+        }
+    }    
+}
+
+
+
+pub Decl: Expr =  {
+    "var" <i: Ident> "=" <r: Expr> => Expr::DeclVar{
+        name: i.into(),
+        _type: Type::UnTyped,   
     }
 };
+
+pub Expr: Expr = {
+    Decl,
+    <l: Factor> <op: AddSubOp> <r: Expr> => Expr::BinExpr{
+        op,
+        lhs: l.into(),
+        rhs: r.into(),
+    },  
+    Factor,
+    BlockExpr,
+
+};
+
+
