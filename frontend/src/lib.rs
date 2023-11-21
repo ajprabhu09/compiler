@@ -1,22 +1,29 @@
-mod parser;
-#[macro_use]
-extern crate lalrpop_util;
-
-
-
+#![feature(let_chains)]
+pub mod ast;
+pub mod srcfile;
+pub mod token;
+pub mod pratt;
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod test {
+    use std::fmt::format;
 
-    // lalrpop_util::lalrpop_mod!(pub calculator1); // synthesized by LALRPOP
-    // #[test]
-    // fn calculator1() {
-    //     assert!(calculator1::TermParser::new().parse("22").is_ok());
-    //     assert!(calculator1::TermParser::new().parse("(22)").is_err());;
-    // }
-    // #[test]
-    // fn it_works() {
-    //     let result = add(2, 2);
-    //     assert_eq!(result, 4);
-    // }
+    use crate::{ast::Ast, srcfile::SrcFile, token::Token};
+    use glob::glob;
+
+    #[test]
+    pub fn test_files() {
+        let files = glob("./test_files/*.snake").expect("invalid path");
+        for entry in glob("./test_files/*.snake").expect("Failed to read glob pattern") {
+            match entry {
+                Ok(path) => {
+                    let fp = format!("{}", path.display());
+                    let tokens = SrcFile::parse_file(&fp);
+                    println!("{:?}", tokens.lexer().clone().collect::<Vec<_>>());
+                    let ast = Ast::from(tokens);
+                    println!("{:?}", ast.ast());
+                }
+                Err(e) => println!("No such file: {:?}", e),
+            }
+        }
+    }
 }

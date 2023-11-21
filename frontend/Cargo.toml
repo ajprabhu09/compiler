@@ -3,18 +3,12 @@ name = "frontend"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-
-[build-dependencies] # <-- We added this and everything after!
-lalrpop = "0.19.9"
-
 
 [dependencies]
-lalrpop-util = "0.19.9"
-regex = "1"
+logos = { git = "https://github.com/maciejhirsz/logos/" }
 
 [dev-dependencies]
+glob = "0.3.1"
 stacker = "0.1.15"
 
 
