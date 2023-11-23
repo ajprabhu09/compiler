@@ -1,8 +1,11 @@
 #![feature(let_chains)]
+#![feature(assert_matches)]
+
 pub mod ast;
 pub mod srcfile;
 pub mod token;
 pub mod pratt;
+pub mod parsing;
 #[cfg(test)]
 mod test {
     use std::fmt::format;
@@ -18,9 +21,9 @@ mod test {
                 Ok(path) => {
                     let fp = format!("{}", path.display());
                     let tokens = SrcFile::parse_file(&fp);
-                    println!("{:?}", tokens.lexer().clone().collect::<Vec<_>>());
+                    // println!("{:?}", tokens.lexer().clone().collect::<Vec<_>>());
                     let ast = Ast::from(tokens);
-                    println!("{:?}", ast.ast());
+                    println!("AST:: {:#?}", ast.ast());
                 }
                 Err(e) => println!("No such file: {:?}", e),
             }

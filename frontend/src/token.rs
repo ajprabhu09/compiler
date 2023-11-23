@@ -55,4 +55,7 @@ pub enum Token {
 
     #[regex("[a-zA-Z][a-zA-Z0-9]*")]
     Ident,
+
+    #[end]
+    Eof
 }
