@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 #![feature(assert_matches)]
-
+#![feature(trait_alias)]
 pub mod ast;
 pub mod srcfile;
 pub mod token;

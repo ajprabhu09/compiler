@@ -1,2 +1,4 @@
 
-func main()
+func main(a: A,a: B) {
+    var x: A = 1;
+}

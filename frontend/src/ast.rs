@@ -1,14 +1,14 @@
 use core::fmt;
-use std::{boxed, fmt::Debug, io::Empty, ops::Range, rc::Rc, vec, assert_matches::assert_matches, collections::LinkedList};
+use std::{boxed, fmt::Debug, io::Empty, ops::Range, rc::Rc, vec, assert_matches::assert_matches, collections::LinkedList, process::id};
 
 use logos::Lexer;
 
 use crate::{
     srcfile::SrcFile,
-    token::{self, Token}, parsing::{PResult, ParsingErr, Match, Parseable, Consume, self, ZeroOrMore},
+    token::{self, Token}, parsing::{PResult, ParsingErr, Match, Parseable, Consume, self, ZeroOrMore, MatchSeq, empty_expr, empty_combine, second, Optional, identity, first, collect, Either},
 };
 use Token::*;
-
+use parsing::DebugParseable;
 pub enum List<'a> {
     Cons(Rc<Expr<'a>>, Rc<Seq<'a>>),
     Nil
@@ -23,16 +23,21 @@ impl<'a> Seq<'a> {
     pub fn empty() -> Self {
         Self { container: LinkedList::new() }
     }
-    pub fn push_expr(mut self, e: Expr<'a>) -> Self {
+    pub fn push_back_expr(mut self, e: Expr<'a>) -> Self {
         self.container.push_back(e.into());
         self
     }
+    pub fn push_front_expr(mut self, e: Expr<'a>) -> Self {
+        self.container.push_front(e.into());
+        self
+    }
+
 }
 
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Type<'source>(SrcInfo<'source>);
 
 #[derive(Debug)]
@@ -41,6 +46,8 @@ pub struct Param<'source> {
     pub typ: Type<'source>,
 }
 
+
+#[derive(Clone)]
 pub struct SrcInfo<'a> {
     span: Range<usize>,
     data: &'a str,
@@ -107,19 +114,14 @@ pub enum Fixity {
 
 #[derive(Debug)]
 pub enum Expr<'source> {
-
-
-
     Type(Type<'source>), // This ideally be a reference to a previously defined type
-
     Ident(SrcInfo<'source>),
     Lit(SrcInfo<'source>),
     Decl {
         typ: Type<'source>,
         name: SrcInfo<'source>,
-        value: Option<Rc<Expr<'source>>>,
+        value: Rc<Expr<'source>>,
     },
-
     FuncCall {
         op: SrcInfo<'source>,
         args: Vec<Rc<Expr<'source>>>,
@@ -128,11 +130,12 @@ pub enum Expr<'source> {
     },
     FuncDef {
         name: SrcInfo<'source>,
-        args: Vec<Param<'source>>,
+        args: LinkedList<Param<'source>>,
         block: Seq<'source>,
     },
-    Block(Seq<'source>),
-    TopLevel(Seq<'source>),
+    // Block(Seq<'source>),
+    // TopLevel(Seq<'source>),
+    List(Seq<'source>),
     Empty,
     Return {
         expr: Rc<Expr<'source>>,
@@ -157,53 +160,205 @@ pub struct Ast {
 
 impl Ast {
 
-
-    fn function_parser<'a>(lexr: &mut Lexer<'a, Token>) -> PResult<Expr<'a>> {
-        let func_keyword = Consume(Token::Func);
-        let func_name = Match(Token::Ident, |lexr| {
-            let function_name: SrcInfo<'_> = lexr.into();
-            Ok(Expr::FuncDef { name: function_name, args: vec![], block: Seq::empty() })
+    fn integer_parser<'a>() -> impl DebugParseable<'a> {
+        let int_liter = Match(Token::Integer, |lexr| {
+            Ok(Expr::Lit(lexr.into()))
         });
-
-        let binding = parsing::Seq(
-                &func_name,
-                &parsing::Seq(
-                    &Consume(Token::OpenParen),
-                    &Consume(Token::CloseParen),
-                    |a,b| {Ok(Expr::Empty)}
-                ),
-                |a,b| {
-                    assert_matches!(a, Expr::FuncDef { .. });
-                    Ok(a)
-                },
-            );
-        let function = parsing::Seq(
-            &func_keyword,
-            &binding,
-            |a,b| { assert_matches!(b, Expr::FuncDef { .. }); Ok(b) }
-        );
-        let zero_ormore = ZeroOrMore(&function, |a, b| {
-            if let Expr::Empty = a {
-                return Ok(Expr::TopLevel(Seq::empty().push_expr(b)));
-            }
-            if let Expr::TopLevel(seq) = a {
-                return Ok(Expr::TopLevel(seq.push_expr(b)));
-            }
-            return Err(ParsingErr);
-        });
-
-        zero_ormore.consume_parse(lexr).unwrap()
-
+        int_liter
     }
 
+    fn ident_parser<'a>() -> impl DebugParseable<'a> {
+        let ident_parser = Match(Token::Ident, |lexr| Ok(Expr::Ident(lexr.into())));
+        return ident_parser
+    }
+
+    fn parse_type_annotation<'a>() -> impl DebugParseable<'a> {
+        let binding = MatchSeq(
+            Self::ident_parser(),
+            MatchSeq(
+                Consume(Token::Colon),
+                Self::ident_parser(),
+                second()
+            ),
+            |a, b| { 
+                if let Expr::Ident(name) = a {
+                    if let Expr::Ident(type_) = b {
+                        return Ok(Expr::Decl { typ: Type(type_), name: name, value: Expr::Empty.into() })
+                    }
+                }
+                return Err(ParsingErr("unable to parse type annotation".into()))
+            }
+        );
+        return binding;
+    }
+    fn param_list<'a>() -> impl DebugParseable<'a> {
+        let binding = MatchSeq(
+            Consume(Token::OpenParen),
+            MatchSeq(
+                MatchSeq(
+                    Optional(Self::parse_type_annotation(), identity()),
+                    ZeroOrMore(
+                        MatchSeq(
+                            Consume(Token::Comma),
+                            Self::parse_type_annotation(),
+                            second(),
+                        ),
+                        collect(),
+                    ),
+                    |a,b| {
+                        if let Expr::Empty = a {
+                            return Ok(Expr::Empty);
+                        }
+                        if let Expr::List(seq) = b {
+                            return Ok(Expr::List(seq.push_front_expr(a)));
+                        }
+                        return Err(ParsingErr("invalid ast~".into()))
+                    }
+                ),
+                Consume(Token::CloseParen),
+                first()
+            ),
+            second(),
+        );
+        return binding
+    } 
+
+    fn rhs_expr<'a>() -> impl DebugParseable<'a> {
+        Match(
+            Token::Integer,
+            |lexr| 
+                Ok(Expr::Lit(lexr.into()))
+        )
+    }
+
+    fn decl_or_decl_assign_typed<'a>() -> impl DebugParseable<'a> {
+        MatchSeq(
+            Consume(Token::Var),
+            MatchSeq(
+                Self::parse_type_annotation(),
+                Optional(
+                    MatchSeq(
+                        Consume(Token::Eq),
+                        Self::rhs_expr(),
+                        second()
+                    ),
+                    identity()
+                ),
+                |decl, rhs| {
+                    if let Expr::Decl { typ, name, value:_  } = decl {
+                        println!("AA {:?}", rhs);
+                        return Ok(Expr::Decl { typ, name, value: rhs.into() });
+                    }
+                    return Err(ParsingErr(format!("expected declaration but got {:?}", decl)))
+                }
+            ),
+            second()
+        )
+    }
+
+    fn statement_parser<'a>() -> impl DebugParseable<'a> {
+        Self::decl_or_decl_assign_typed()
+    }
+
+    fn statements_parser<'a>() -> impl DebugParseable<'a> {
+        ZeroOrMore(
+            MatchSeq(
+                Self::statement_parser(),
+                Consume(Token::Semicolon),
+                first()
+            ),
+        collect())
+    }
+
+
+    fn function_parser<'a>() -> impl DebugParseable<'a> {
+        let prototype = MatchSeq(
+                Self::ident_parser(),
+                Self::param_list(),
+                |a, b| {
+                    let mut list;
+                    if let Expr::List(seq) = b {
+                       list = seq.container.into_iter().map(|v| {
+                            if let Expr::Decl { typ, name, value:_ }
+                             = v.as_ref() {
+                                return Some(Param{
+                                    arg_name: name.clone(),
+                                    typ: typ.clone(),
+                                })
+                            }
+                           return None
+                        }).filter(|x|x.is_some()).flatten().collect::<LinkedList<_>>();
+                    } else {
+                        return Err(ParsingErr("expected a argument list".into()));
+                    }
+
+                    if let Expr::Ident(src) = a {
+                        return Ok(Expr::FuncDef { name: src, args: list, block: Seq::empty() })
+                    }
+                   return Err(ParsingErr("expected identifier found something else".into()))
+                }
+            );
+        let func_parser = MatchSeq(
+            Consume(Token::Func),
+            MatchSeq(
+                prototype,
+                MatchSeq(
+                    Consume(Token::OpenBrace),
+                    MatchSeq(
+                        Self::statements_parser(),
+                        Consume(Token::CloseBrace),
+                        first()
+                    ),
+                    second(),
+                ),
+                |a,b| {
+                    if let Expr::FuncDef { name, args, block } = a {
+                        if let Expr::List(seq) = b {
+                            return Ok(Expr::FuncDef { name, args, block: seq })
+                        }
+                        return Err(ParsingErr(format!("unable to parse function {:?}", name.data)))
+                    }
+                    return Err(ParsingErr(format!("unable to parse function ")))
+                }
+            ),
+            second()
+        );
+        func_parser
+    }
+
+
     fn parse<'a>(lexr: &mut Lexer<'a, Token>) -> PResult<Expr<'a>> {
-        Self::function_parser(lexr)
+        let parser = Self::function_parser();
+        parser.consume_parse(lexr)
+
     }
     pub fn from(src: SrcFile) -> Self {
         Self { src }
     }
     pub fn ast(&self) -> PResult<Expr<'_>> {
         Self::parse(&mut self.src.lexer())
+    }
+
+}
+
+
+#[cfg(test)]
+mod tests {
+    use crate::{srcfile::SrcFile, parsing::Parseable};
+
+    use super::Ast;
+
+    pub fn testsrc(src: &str) -> SrcFile {
+        SrcFile {
+            src: src.to_string(),
+            path: "idc".into(),
+        }
+    }   
+    #[test]
+    pub fn test_param_list_parse() {
+        let src = testsrc("func asd(a: )");
+        let parser = Ast::function_parser();
+        let result = parser.consume_parse(&mut src.lexer());
     }
 
 }
