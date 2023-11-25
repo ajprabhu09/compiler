@@ -1,4 +1,5 @@
 
-func main(a: A,a: B) {
+func main(a: A) {
     var x: A = 1;
+    
 }

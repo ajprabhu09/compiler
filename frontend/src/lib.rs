@@ -8,7 +8,7 @@ pub mod pratt;
 pub mod parsing;
 #[cfg(test)]
 mod test {
-    use std::fmt::format;
+    use std::{fmt::format, time::Instant};
 
     use crate::{ast::Ast, srcfile::SrcFile, token::Token};
     use glob::glob;
@@ -20,10 +20,15 @@ mod test {
             match entry {
                 Ok(path) => {
                     let fp = format!("{}", path.display());
+                    let now = Instant::now();
                     let tokens = SrcFile::parse_file(&fp);
                     // println!("{:?}", tokens.lexer().clone().collect::<Vec<_>>());
                     let ast = Ast::from(tokens);
-                    println!("AST:: {:#?}", ast.ast());
+                    let ast = ast.ast();  
+                    println!("File {:?} took {:?}", fp, now.elapsed());
+
+                    println!("AST:: {:?}", ast);
+
                 }
                 Err(e) => println!("No such file: {:?}", e),
             }
