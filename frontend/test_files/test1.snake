@@ -1,5 +1,5 @@
 
-func main(a: A) {
-    var x: A = 1;
-    
+func main(a: int) {
+    var x: int = 1;
+    return x;
 }

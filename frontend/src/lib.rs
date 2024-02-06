@@ -27,7 +27,7 @@ mod test {
                     let ast = ast.ast();  
                     println!("File {:?} took {:?}", fp, now.elapsed());
 
-                    println!("AST:: {:?}", ast);
+                    println!("AST:: {:#?}", ast);
 
                 }
                 Err(e) => println!("No such file: {:?}", e),

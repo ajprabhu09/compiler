@@ -104,7 +104,7 @@ impl<'a> Parseable<'a> for Consume{
 
 
 #[derive(Debug)]
-pub struct Either<'a, A: Parseable<'a>, B: Parseable<'a>>(pub A, pub B, TfExpFn<'a>);
+pub struct Either<'a, A: Parseable<'a>, B: Parseable<'a>>(pub A, pub B, pub TfExpFn<'a>);
 
 impl<'a,A: Parseable<'a> + Debug, B: Parseable<'a> + Debug> Parseable<'a> for Either<'a, A, B> {
     fn peek_match(& self, lexr: &mut Lexer<'a, Token>) -> bool {
@@ -126,7 +126,9 @@ pub struct MatchSeq<'a, A: Parseable<'a> + Debug, B: Parseable<'a> + Debug>(pub 
 
 impl<'a, A: Parseable<'a> + Debug, B: Parseable<'a> + Debug> Parseable<'a> for MatchSeq<'a, A, B> {
     fn peek_match(& self, lexr: &mut Lexer<'a, Token>) -> bool {
-        return self.0.peek_match(lexr);
+        let mut lexr_clone = lexr.clone();
+        let res = self.consume_parse(&mut lexr_clone);
+        return res.is_ok();
     }
 
     fn consume_parse(& self, lexr: &mut Lexer<'a, Token>) -> PResult<Expr<'a>> {
